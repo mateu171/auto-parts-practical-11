@@ -1,0 +1,45 @@
+@baseUrl = http://localhost:3000
+
+### ===== Практична 10: нотифікації =====
+
+### Логін менеджера (MECHANIC або ADMIN) — скопіюйте accessToken у змінну нижче
+# @name loginManager
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "driver@test.com",
+  "password": "123456"
+}
+
+
+### Підбір запчастини за VIN: WebSocket у кімнату request_<VIN> + лист у Mailpit
+# partId — id існуючої запчастини (GET {{baseUrl}}/parts)
+POST {{baseUrl}}/requests/WVWZZZ1JZXW000001/part-found
+Authorization: Bearer {{loginManager.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "partId": "ef2d9ccd-70f8-4fd7-bd25-54b7edd4537d",
+  "customerEmail": "client@example.com",
+  "managerComment": "Деталь є в наявності, сумісна з вашим авто"
+}
+
+### Невалідний VIN — очікується 400
+POST {{baseUrl}}/requests/BAD-VIN/part-found
+Authorization: Bearer {{loginManager.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "partId": "ВСТАВТЕ-UUID-ЗАПЧАСТИНИ",
+  "customerEmail": "client@example.com"
+}
+
+### Без токена — очікується 401
+POST {{baseUrl}}/requests/WVWZZZ1JZXW000001/part-found
+Content-Type: application/json
+
+{
+  "partId": "ВСТАВТЕ-UUID-ЗАПЧАСТИНИ",
+  "customerEmail": "client@example.com"
+}

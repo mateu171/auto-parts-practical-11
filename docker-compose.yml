@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nest_store_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nest_user
+      POSTGRES_PASSWORD: nest_password
+      POSTGRES_DB: store_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: nest_mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP-порт
+      - "8025:8025" # Web UI
+
+volumes:
+  pgdata:

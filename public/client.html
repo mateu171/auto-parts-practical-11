@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoParts — Real-time клієнт</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 24px auto; padding: 0 16px; background: #f3f4f6; color: #111827; }
+    h1 { margin-bottom: 4px; }
+    section { background: #fff; border-radius: 8px; padding: 16px; margin: 16px 0; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    h2 { margin-top: 0; font-size: 18px; }
+    input { padding: 8px; width: 60%; min-width: 220px; }
+    button { padding: 8px 14px; cursor: pointer; border: 0; border-radius: 4px; background: #111827; color: #fff; }
+    button.secondary { background: #6b7280; }
+    ul { list-style: none; padding: 0; margin: 12px 0 0; max-height: 180px; overflow-y: auto; }
+    li { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; font-size: 14px; font-family: Consolas, monospace; }
+    #status { font-weight: bold; }
+    .ok { color: #059669; } .bad { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <h1>AutoParts — сповіщення в реальному часі</h1>
+  <p>Статус WebSocket: <span id="status" class="bad">відключено</span> | Socket ID: <span id="sid">—</span></p>
+
+  <section>
+    <h2>1. Широкомовне повідомлення (broadcast)</h2>
+    <input id="msg" placeholder="Текст повідомлення для всіх клієнтів">
+    <button id="send">Надіслати всім</button>
+    <button id="ping" class="secondary">Ping</button>
+    <ul id="globalList"></ul>
+  </section>
+
+  <section>
+    <h2>2. Кімната запиту (request_&lt;VIN&gt;)</h2>
+    <input id="room" value="request_WVWZZZ1JZXW000001">
+    <button id="join">Приєднатися</button>
+    <button id="leave" class="secondary">Вийти</button>
+    <ul id="roomList"></ul>
+  </section>
+
+  <section>
+    <h2>3. Server-Sent Events (/notifications/events/stream)</h2>
+    <button id="sseStart">Підключитися до SSE</button>
+    <button id="sseStop" class="secondary">Відключитися</button>
+    <ul id="sseList"></ul>
+  </section>
+
+  <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+  <script>
+    const BASE = 'http://localhost:3000';
+    const $ = (id) => document.getElementById(id);
+
+    function log(listId, text) {
+      const li = document.createElement('li');
+      li.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+      $(listId).prepend(li);
+    }
+
+    const socket = io(BASE);
+
+    socket.on('connect', () => {
+      $('status').textContent = 'підключено';
+      $('status').className = 'ok';
+      $('sid').textContent = socket.id;
+    });
+    socket.on('disconnect', () => {
+      $('status').textContent = 'відключено';
+      $('status').className = 'bad';
+    });
+
+    socket.on('pong', (d) => log('globalList', `pong: ${d.timestamp}`));
+    socket.on('globalAlert', (d) => log('globalList', `globalAlert від ${d.sender}: ${d.message}`));
+    socket.on('joined', (d) => log('roomList', `Приєднано до кімнати ${d.roomId}`));
+    socket.on('left', (d) => log('roomList', `Вийшли з кімнати ${d.roomId}`));
+    socket.on('partFound', (d) =>
+      log('roomList', `partFound: ${d.part.title} (${d.part.oemCode}), ${d.part.price} грн — ${d.managerComment ?? 'без коментаря'}`));
+    socket.on('exception', (e) => log('roomList', `Помилка: ${e.message}`));
+
+    $('send').onclick = () => {
+      const text = $('msg').value.trim();
+      if (text) { socket.emit('broadcastNotification', text); $('msg').value = ''; }
+    };
+    $('ping').onclick = () => socket.emit('ping');
+    $('join').onclick = () => socket.emit('joinRoom', { roomId: $('room').value.trim().toUpperCase().replace(/^REQUEST_/, 'request_') });
+    $('leave').onclick = () => socket.emit('leaveRoom', { roomId: $('room').value.trim().toUpperCase().replace(/^REQUEST_/, 'request_') });
+
+    let eventSource = null;
+    $('sseStart').onclick = () => {
+      if (eventSource) return;
+      eventSource = new EventSource(`${BASE}/notifications/events/stream`);
+      eventSource.onmessage = ({ data }) => {
+        const d = JSON.parse(data);
+        log('sseList', `#${d.tick} статус=${d.status}, підключень=${d.activeConnections}, час=${d.serverTime}`);
+      };
+      eventSource.onerror = () => log('sseList', 'SSE: помилка або перепідключення');
+    };
+    $('sseStop').onclick = () => {
+      if (eventSource) { eventSource.close(); eventSource = null; log('sseList', 'SSE відключено'); }
+    };
+  </script>
+</body>
+</html>
